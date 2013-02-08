@@ -18,7 +18,8 @@ config.read('default.cfg')
 URL_V2T= config.get('Google', 'url_voice2text')
 URL_T2V= config.get('Google', 'url_text2voice')
 URL_WOLF= config.get('Wolfram', 'url')
-REC_KEY= config.get('Key Bindings', 'capture_key')
+REC_KEY= config.get('Key Bindings', 'rec_key')
+QUIT_KEY= config.get('Key Bindings', 'quit_key')
 
 
 
@@ -268,10 +269,11 @@ load_commands()
 
 sleep(1)
 
-print getkey()
+
 
 while True:
 	if not GPIO.input(3) or getkey()==REC_KEY:  
 		dialogue()
-
+	elif getkey()==QUIT_KEY:
+		terminate()
 
