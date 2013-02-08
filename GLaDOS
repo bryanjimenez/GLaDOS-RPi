@@ -274,6 +274,6 @@ sleep(1)
 while True:
 	if not GPIO.input(3) or getkey()==REC_KEY:  
 		dialogue()
-	#elif getkey()==QUIT_KEY:
-	#	terminate()
+	elif getkey()==QUIT_KEY:
+		terminate()
 
