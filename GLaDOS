@@ -1,0 +1,254 @@
+#!/usr/bin/python
+
+import RPi.GPIO as GPIO  
+import urllib2
+import json
+from xml.dom import minidom
+import sys
+import os
+from time import sleep
+from subprocess import Popen, PIPE
+import ConfigParser
+
+FLAC_FILE="query.flac"
+
+config = ConfigParser.ConfigParser()
+config.read('default.cfg')
+URL_V2T= config.get('Google', 'url_voice2text')
+URL_T2V= config.get('Google', 'url_text2voice')
+URL_WOLF= config.get('Wolfram', 'url')
+
+cmds = ConfigParser.RawConfigParser()
+cmds.read('commands.cfg')
+
+know = ConfigParser.RawConfigParser()
+know.read('knowledge.cfg')
+
+non_ascii_chars = {
+'\n':' ',
+u'\xb0F': "degrees Fahrenheit",
+u'\xd7': "*",
+'  ':' ',
+'+':'plus',
+'|':'',
+'(':'',
+')':'',
+"'":''
+}
+knowledge = {}
+commands = {}
+#-------------------------------------------------------------------------------------------------------------------------------
+def remember(phrase):
+	return knowledge[phrase].replace("\n","");
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def reminder():
+	print "not implemented"
+	
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def memorize():
+
+	respond("What question would you like me to remember?")
+	(question, certainty) = listen()
+	
+	respond("How would you like me to respond")
+	(answer, certainty) = listen()
+
+	know.set('Questions',question,answer)
+	
+	with open('knowledge.cfg', 'wb') as configfile:
+		know.write(configfile)
+	
+	load_knowledge()
+	
+	return "I won't forget"
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def jokes():
+	respond("Who's there?")
+	(knocker, certainty) = listen()
+	
+	respond(knocker + " Who?")
+	(answer, certainty) = listen()
+
+	return "HA HA HA! That was a good joke!"
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def multipleReplace(text, wordDict):
+    for key in wordDict:
+        text = text.replace(key, wordDict[key])
+    return text
+#-------------------------------------------------------------------------------------------------------------------------------
+def wolfram(query):
+
+	u = urllib2.urlopen(URL_WOLF + urllib2.quote(query))
+
+	xmldoc = minidom.parse(u)
+	itemlist = xmldoc.getElementsByTagName('plaintext') 
+
+
+	#for node in itemlist[:2]:
+	if(len(itemlist)==1):
+		response = itemlist[0].firstChild.data
+	elif(len(itemlist)>=2):
+		response = itemlist[1].firstChild.data
+	else:
+		response = "I am not sure"
+
+	return multipleReplace(response,non_ascii_chars)
+
+#-------------------------------------------------------------------------------------------------------------------------------	
+def affirm(phrase):
+	respond("Did you say, " + phrase + "?")
+	
+	f = open(record())
+	message = f.read()
+	f.close()
+		
+	req = urllib2.Request(url=URL_V2T, data=message, headers={"Content-type": "audio/x-flac; rate=8000"})
+	u = urllib2.urlopen(req)
+	data = json.load(u)
+
+	if len(data["hypotheses"])>0:
+		phrase = data["hypotheses"][0]["utterance"]
+		certainty = data["hypotheses"][0]["confidence"]
+		print 'You: "' + phrase +'"'
+		if phrase=="yes":
+			return True
+
+	return False
+
+#-------------------------------------------------------------------------------------------------------------------------------	
+def listen():
+	try:
+		f = open(record())
+		message = f.read()
+		f.close()
+
+		req = urllib2.Request(url=URL_V2T, data=message, headers={"Content-type": "audio/x-flac; rate=8000"})
+		u = urllib2.urlopen(req)
+		data = json.load(u)
+
+
+		if len(data["hypotheses"])>0:
+			phrase = data["hypotheses"][0]["utterance"]
+			certainty = data["hypotheses"][0]["confidence"]
+			print "You: " +'"' + phrase	+ '"'
+			return (phrase, certainty)	
+		else:
+			respond ("Could you say that again?")
+			return listen()
+	except:
+		return None
+
+#-------------------------------------------------------------------------------------------------------------------------------	
+def respond(results):
+	if results:
+		print 'GLaDOS: "' + results + '"'
+		os.system('mplayer -ao alsa -really-quiet -noconsolecontrols "http://translate.google.com/translate_tts?tl=en&q=' + results + '"')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def command(phrase):
+	os.system(commands[phrase])
+	return "Command '" + phrase + "' was executed"
+	
+#-------------------------------------------------------------------------------------------------------------------------------
+def record():
+
+	os.system("rm "+FLAC_FILE +" 2>/dev/null")
+	
+	os.system("aplay sounds/begin.wav 2>/dev/null")	
+	os.system("arecord -Dplughw:`arecord -l | grep -o ': [a-zA-Z0-9]* \[' | grep -o '[a-zA-Z0-9]*'` -f cd -d 5 -c 1 -r 8000 -t wav - 2>/dev/null | flac -0 - --sample-rate=8000 --channels=1 -o " + FLAC_FILE + " 2>/dev/null")
+	os.system("aplay sounds/end.wav 2>/dev/null")	
+
+	return FLAC_FILE
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def load_knowledge():
+	knowledge.clear()
+	k=know.items('Questions')
+	for line in k:
+		(q, a) = line
+		knowledge[q] = a
+
+def load_commands():
+	commands.clear()
+	c=cmds.items('Commands')
+	for cmd in c:
+		(q, a) = cmd
+		commands[q] = a
+#-------------------------------------------------------------------------------------------------------------------------------
+
+def dialogue():
+	try:
+		(phrase, certainty) = listen()
+	except:
+		print 'connect failed...'
+		return None
+		
+	results=''
+	
+	if phrase in functions:
+		results = functions[phrase]()
+		respond(results)
+		return results
+			
+	if phrase in commands:
+		results = command(phrase)
+		respond(results)
+		return results		
+		
+	if certainty >= .70:
+		if phrase in knowledge:
+			results = remember(phrase)
+		else:
+			results = wolfram(phrase)
+	else:
+		if affirm(phrase)==True:
+			if phrase in knowledge:
+				results = remember(phrase)
+			else:
+				results = wolfram(phrase)
+		
+	respond(results)
+	return results
+#-------------------------------------------------------------------------------------------------------------------------------	
+def terminate():
+	os.system("aplay sounds/powerdown.wav 2>/dev/null")
+	respond("See you soon!")
+	GPIO.cleanup()	
+	sys.exit(0)
+#-------------------------------------------------------------------------------------------------------------------------------	
+def countdown():
+	respond("9, 8, 7, 6, 5, 4, 3, 2, 1, Blast off!")
+	
+functions = {
+'memorize': memorize,
+'remind me':reminder,
+'knock knock': jokes,
+'goodbye': terminate,
+'shut down': terminate,
+'quit': terminate,
+'countdown': countdown
+}
+	
+#print "!"+ sys.argv[1]+"!"
+
+print ''	
+os.system("aplay sounds/powerup.wav 2>/dev/null")
+  
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(3,GPIO.IN)
+
+load_knowledge()
+load_commands()
+
+sleep(1)
+
+
+while True:
+	if not GPIO.input(3):  
+		dialogue()
+
+
