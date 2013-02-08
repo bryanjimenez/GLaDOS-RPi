@@ -247,9 +247,6 @@ load_commands()
 sleep(1)
 
 
-from msvcrt import getch
-while True:
-    print(ord(getch()))
 
 while True:
 	if not GPIO.input(3):  
