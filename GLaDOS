@@ -138,7 +138,7 @@ def listen():
 			return (phrase, certainty)	
 		else:
 			respond ("Could you say that again?")
-			return listen()
+			return None
 	except:
 		return None
 
@@ -184,7 +184,7 @@ def dialogue():
 	try:
 		(phrase, certainty) = listen()
 	except:
-		print 'connect failed...'
+		print 'try again...'
 		return None
 		
 	results=''
@@ -246,6 +246,10 @@ load_commands()
 
 sleep(1)
 
+
+from msvcrt import getch
+while True:
+    print(ord(getch()))
 
 while True:
 	if not GPIO.input(3):  
