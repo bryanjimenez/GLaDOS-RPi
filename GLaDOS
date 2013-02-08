@@ -18,6 +18,9 @@ config.read('default.cfg')
 URL_V2T= config.get('Google', 'url_voice2text')
 URL_T2V= config.get('Google', 'url_text2voice')
 URL_WOLF= config.get('Wolfram', 'url')
+REC_KEY= config.get('Key Bindings', 'capture_key')
+
+
 
 cmds = ConfigParser.RawConfigParser()
 cmds.read('commands.cfg')
@@ -268,7 +271,7 @@ sleep(1)
 print getkey()
 
 while True:
-	if not GPIO.input(3) or getkey()==' ':  
+	if not GPIO.input(3) or getkey()==REC_KEY:  
 		dialogue()
 
 
