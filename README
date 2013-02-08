@@ -1,0 +1,8 @@
+GLaDOS
+
+speak to your Raspberry Pi and have it answer and obey
+
+
+TODO:
+
+key bindings (currently using GPIO to trigger GLaDOS)
