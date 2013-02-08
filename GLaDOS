@@ -4,11 +4,12 @@ import RPi.GPIO as GPIO
 import urllib2
 import json
 from xml.dom import minidom
-import sys
-import os
+import sys, os
 from time import sleep
-from subprocess import Popen, PIPE
+#from subprocess import Popen, PIPE
 import ConfigParser
+import termios
+TERMIOS = termios
 
 FLAC_FILE="query.flac"
 
@@ -37,6 +38,24 @@ u'\xd7': "*",
 }
 knowledge = {}
 commands = {}
+
+
+
+def getkey():
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    new = termios.tcgetattr(fd)
+    new[3] = new[3] & ~TERMIOS.ICANON & ~TERMIOS.ECHO
+    new[6][TERMIOS.VMIN] = 1
+    new[6][TERMIOS.VTIME] = 0
+    termios.tcsetattr(fd, TERMIOS.TCSANOW, new)
+    c = None
+    try:
+        c = os.read(fd, 1)
+    finally:
+        termios.tcsetattr(fd, TERMIOS.TCSAFLUSH, old)
+    return c
+
 #-------------------------------------------------------------------------------------------------------------------------------
 def remember(phrase):
 	return knowledge[phrase].replace("\n","");
@@ -246,10 +265,10 @@ load_commands()
 
 sleep(1)
 
-
+print getkey()
 
 while True:
-	if not GPIO.input(3):  
+	if not GPIO.input(3) or getkey()==' ':  
 		dialogue()
 
 
