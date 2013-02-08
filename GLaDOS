@@ -44,7 +44,7 @@ knowledge = {}
 commands = {}
 
 
-
+#-------------------------------------------------------------------------------------------------------------------------------
 def getkey():
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
@@ -270,10 +270,10 @@ load_commands()
 sleep(1)
 
 
-
 while True:
-	if not GPIO.input(3) or getkey()==REC_KEY:  
+	keypress=getkey()
+	if not GPIO.input(3) or keypress==REC_KEY:  
 		dialogue()
-	elif getkey()==QUIT_KEY:
+	elif keypress==QUIT_KEY:
 		terminate()
 
