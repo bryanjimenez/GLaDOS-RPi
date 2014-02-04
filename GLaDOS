@@ -8,8 +8,8 @@ import sys, os
 from time import sleep
 #from subprocess import Popen, PIPE
 import ConfigParser
-import termios
-TERMIOS = termios
+#import termios
+#TERMIOS = termios
 
 FLAC_FILE="query.flac"
 
@@ -45,55 +45,59 @@ commands = {}
 
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def getkey():
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
-    new = termios.tcgetattr(fd)
-    new[3] = new[3] & ~TERMIOS.ICANON & ~TERMIOS.ECHO
-    new[6][TERMIOS.VMIN] = 1
-    new[6][TERMIOS.VTIME] = 0
-    termios.tcsetattr(fd, TERMIOS.TCSANOW, new)
-    c = None
-    try:
-        c = os.read(fd, 1)
-    finally:
-        termios.tcsetattr(fd, TERMIOS.TCSAFLUSH, old)
-    return c
-
+#def getkey():
+#    fd = sys.stdin.fileno()
+#    old = termios.tcgetattr(fd)
+#    new = termios.tcgetattr(fd)
+#    new[3] = new[3] & ~TERMIOS.ICANON & ~TERMIOS.ECHO
+#    new[6][TERMIOS.VMIN] = 1
+#    new[6][TERMIOS.VTIME] = 0
+#    termios.tcsetattr(fd, TERMIOS.TCSANOW, new)
+#    c = None
+#    try:
+#        c = os.read(fd, 1)
+#    finally:
+#        termios.tcsetattr(fd, TERMIOS.TCSAFLUSH, old)
+#    return c
 #-------------------------------------------------------------------------------------------------------------------------------
 def remember(phrase):
 	return knowledge[phrase].replace("\n","");
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def reminder():
+def reminder(phrase):
 	print "not implemented"
 	
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def memorize():
+def memorize(phrase):
+	try:
+		respond("What question would you like me to remember?")
+		(question, certainty) = listen()
+		
+		respond("How would you like me to respond to " + question)
+		(answer, certainty) = listen()
 
-	respond("What question would you like me to remember?")
-	(question, certainty) = listen()
+		know.set('Questions',question,answer)
 	
-	respond("How would you like me to respond")
-	(answer, certainty) = listen()
+		with open('knowledge.cfg', 'wb') as configfile:
+			know.write(configfile)
+	
+		load_knowledge()
+	except:
+		print "memorize() failed" + sys.exc_info()[0]
 
-	know.set('Questions',question,answer)
-	
-	with open('knowledge.cfg', 'wb') as configfile:
-		know.write(configfile)
-	
-	load_knowledge()
-	
 	return "I won't forget"
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def jokes():
-	respond("Who's there?")
-	(knocker, certainty) = listen()
+def jokes(phrase):
+	try:
+		respond("Who's there?")
+		(knocker, certainty) = listen()
 	
-	respond(knocker + " Who?")
-	(answer, certainty) = listen()
+		respond(knocker + " Who?")
+		(answer, certainty) = listen()
+	except:
+		print "jokes() failed"
 
 	return "HA HA HA! That was a good joke!"
 
@@ -104,41 +108,57 @@ def multipleReplace(text, wordDict):
     return text
 #-------------------------------------------------------------------------------------------------------------------------------
 def wolfram(query):
+	try:
+		u = urllib2.urlopen(URL_WOLF + urllib2.quote(query))
 
-	u = urllib2.urlopen(URL_WOLF + urllib2.quote(query))
+		xmldoc = minidom.parse(u)
 
-	xmldoc = minidom.parse(u)
-	itemlist = xmldoc.getElementsByTagName('plaintext') 
+		itemlist = xmldoc.getElementsByTagName('plaintext') 
+		podlist = xmldoc.getElementsByTagName('pod') 
 
 
-	#for node in itemlist[:2]:
-	if(len(itemlist)==1):
-		response = itemlist[0].firstChild.data
-	elif(len(itemlist)>=2):
-		response = itemlist[1].firstChild.data
-	else:
-		response = "I am not sure"
+	# if only one pod return its result
+		if(len(podlist)==1):
+			response = itemlist[0].firstChild.data
+	# if more than one then ..
+		elif(len(podlist)>=2):
+			# check if the first one contains 'input' in the title.. skip
+			if "Input" not in podlist[0].getAttribute('title'):
+				response = itemlist[0].firstChild.data
+			else:
+				response = itemlist[1].firstChild.data
+		# if no pods then say not sure
+		else:
+			response = "I am not sure"
+	except:
+		print "wolfram() failed"
+
+#	print len(response)
 
 	return multipleReplace(response,non_ascii_chars)
 
 #-------------------------------------------------------------------------------------------------------------------------------	
 def affirm(phrase):
-	respond("Did you say, " + phrase + "?")
-	
-	f = open(record())
-	message = f.read()
-	f.close()
-		
-	req = urllib2.Request(url=URL_V2T, data=message, headers={"Content-type": "audio/x-flac; rate=8000"})
-	u = urllib2.urlopen(req)
-	data = json.load(u)
 
-	if len(data["hypotheses"])>0:
-		phrase = data["hypotheses"][0]["utterance"]
-		certainty = data["hypotheses"][0]["confidence"]
-		print 'You: "' + phrase +'"'
-		if phrase=="yes":
-			return True
+	try:
+		respond("Did you say, " + phrase + "?")
+	
+		f = open(record())
+		message = f.read()
+		f.close()
+		
+		req = urllib2.Request(url=URL_V2T, data=message, headers={"Content-type": "audio/x-flac; rate=8000"})
+		u = urllib2.urlopen(req)
+		data = json.load(u)
+
+		if len(data["hypotheses"])>0:
+			phrase = data["hypotheses"][0]["utterance"]
+			certainty = data["hypotheses"][0]["confidence"]
+			print 'You: "' + phrase +'"'
+			if phrase=="yes":
+				return True
+	except:
+		print "affirm() failed"
 
 	return False
 
@@ -157,6 +177,7 @@ def listen():
 		if len(data["hypotheses"])>0:
 			phrase = data["hypotheses"][0]["utterance"]
 			certainty = data["hypotheses"][0]["confidence"]
+			print
 			print "You: " +'"' + phrase	+ '"'
 			return (phrase, certainty)	
 		else:
@@ -166,24 +187,46 @@ def listen():
 		return None
 
 #-------------------------------------------------------------------------------------------------------------------------------	
-def respond(results):
+def respond(results,lang='en'):
 	if results:
-		print 'GLaDOS: "' + results + '"'
-		os.system('mplayer -ao alsa -really-quiet -noconsolecontrols "http://translate.google.com/translate_tts?tl=en&q=' + results + '"')
+		if lang=='en':
+			print 'GLaDOS: "' + results + '"'
+		else:
+			print 'Translator: "' + results + '"'
+			
+		phrase = ''
+		words = results.split(' ')
 
-#-------------------------------------------------------------------------------------------------------------------------------
+
+		# google only accepts 100 chars for text to voice		
+		for i in range(0, len(words)):
+			if(len(phrase + ' ' + words[i]) <100):
+				phrase += ' ' + words[i]
+			else:
+				os.system('mplayer -ao alsa -really-quiet -noconsolecontrols "http://translate.google.com/translate_tts?tl='+lang+'&q=' + phrase + '"')
+				phrase = words[i]
+
+
+		os.system('mplayer -ao alsa -really-quiet -noconsolecontrols "http://translate.google.com/translate_tts?tl='+lang+'&q=' + phrase + '"')
+
+#		[results[i:i+2] for i in xrange(0, len(string), 2)]
+		
+#-------------------------------------------------------------------------------------------------------------------------------	
 def command(phrase):
 	os.system(commands[phrase])
 	return "Command '" + phrase + "' was executed"
 	
 #-------------------------------------------------------------------------------------------------------------------------------
 def record():
+	try:
+		os.system("rm "+FLAC_FILE +" 2>/dev/null")
+		
+		os.system("aplay sounds/begin.wav 2>/dev/null")	
+		os.system("arecord -Dplughw:`arecord -l | grep -o ': [a-zA-Z0-9]* \[' | grep -o '[a-zA-Z0-9]*'` -f cd -d 5 -c 1 -r 8000 -t wav - 2>/dev/null | flac -0 - --sample-rate=8000 --channels=1 -o " + FLAC_FILE + " 2>/dev/null")
+		os.system("aplay sounds/end.wav 2>/dev/null")	
 
-	os.system("rm "+FLAC_FILE +" 2>/dev/null")
-	
-	os.system("aplay sounds/begin.wav 2>/dev/null")	
-	os.system("arecord -Dplughw:`arecord -l | grep -o ': [a-zA-Z0-9]* \[' | grep -o '[a-zA-Z0-9]*'` -f cd -d 5 -c 1 -r 8000 -t wav - 2>/dev/null | flac -0 - --sample-rate=8000 --channels=1 -o " + FLAC_FILE + " 2>/dev/null")
-	os.system("aplay sounds/end.wav 2>/dev/null")	
+	except:
+		print "record() failed"
 
 	return FLAC_FILE
 
@@ -211,9 +254,10 @@ def dialogue():
 		return None
 		
 	results=''
-	
-	if phrase in functions:
-		results = functions[phrase]()
+	firstWord = phrase.split(' ')[0]	
+
+	if firstWord in functions:
+		results = functions[firstWord](phrase)
 		respond(results)
 		return results
 			
@@ -237,22 +281,86 @@ def dialogue():
 	respond(results)
 	return results
 #-------------------------------------------------------------------------------------------------------------------------------	
-def terminate():
-	os.system("aplay sounds/powerdown.wav 2>/dev/null")
+def terminate(phrase):
 	respond("See you soon!")
+	os.system("aplay sounds/powerdown.wav 2>/dev/null")
 	GPIO.cleanup()	
 	sys.exit(0)
 #-------------------------------------------------------------------------------------------------------------------------------	
-def countdown():
+def translate(command):
+        try:
+		#respond("What would you like me to translate?")
+		#(phrase, certainty) = listen()
+
+		#phrase = "I love you"
+
+		phrase = ' '.join(command.split(' ')[1:-2])
+		
+		language = command.split(' ')[-1]				
+
+		print "phrase"+phrase
+
+		print "l" + language
+
+
+		languages = {
+		'Spanish' : 'es',
+		'French' : 'fr',
+		'German' : 'de'
+		}
+
+			
+#		phrase = phrase.partition(' ')[1]				
+
+
+		fromLang="en"
+		toLang= languages[language]
+
+		print "ln" + toLang
+
+		URL_TRANS = "http://translate.google.com/translate_a/t?client=t&hl="+fromLang+"&tl="+toLang+"&text=" + urllib2.quote(phrase)
+
+		print URL_TRANS
+
+#		URL_TRANS = "http://translate.google.com/translate_a/t?client=t&&hl="+fromLang+"&sl=auto&tl="+toLang+"&ie=UTF-8&oe=UTF-8&multires=1&otf=1&ssel=0&tsel=0&uptl="+toLang+"&alttl=hi&sc=1&text=" + urllib2.quote(phrase)
+
+
+		headers = { 'User-Agent' : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.77 Safari/537.36'}
+		req = urllib2.Request(URL_TRANS,None,headers)
+		u = urllib2.urlopen(req)
+
+		#print u.read()
+		result= u.read().split(',')[0][4:-1]
+		#print(result)
+		respond(result,toLang)
+	except Exception as e:
+		print "translate() failed", e
+
+
+
+
+#[[["Je t'aime","I love you","",""]],,"en",,[["Je t'aime",[1],true,false,1000,0,2,0]],[["I you love",1,[["Je t'aime",1000,true,false]],[[0,10]],"I love you"]],,,[["en"]],14]
+
+
+#-------------------------------------------------------------------------------------------------------------------------------	
+def countdown(phrase):
 	respond("9, 8, 7, 6, 5, 4, 3, 2, 1, Blast off!")
+
+
+
+#TODO
+# Do regular expression matching here instead
 	
 functions = {
 'memorize': memorize,
+'remember': memorize,
 'remind me':reminder,
 'knock knock': jokes,
 'goodbye': terminate,
 'shut down': terminate,
 'quit': terminate,
+'translate': translate,
+#'how do you say [] in []': translate,
 'countdown': countdown
 }
 	
@@ -269,11 +377,13 @@ load_commands()
 
 sleep(1)
 
-
 while True:
-	keypress=getkey()
-	if not GPIO.input(3) or keypress==REC_KEY:  
+#	keypress=getkey()
+#	if not GPIO.input(3) or keypress==REC_KEY:  
+	if not GPIO.input(3):  
 		dialogue()
-	elif keypress==QUIT_KEY:
-		terminate()
+#		translate()
+#		print GPIO.input(3)
+#	elif keypress==QUIT_KEY:
+#		terminate()
 
